@@ -1,36 +1,43 @@
-import React, { useContext } from "react";//se importa react y el usecontext para poder usar el context que se usa globalmente
-import { Link } from "react-router-dom";//se importa para darle direcciones a las paginas
-import { ShoppingCart } from "phosphor-react";//se importa el shopping cart ya que desde el header se llama al shopping cart
-import "./navbar.css";//se importa el css
-import { ShopContext } from "../context/shop-context";//se importa el shop context que contiene funciones utilizadas en todas partes en la aplicacion
+import React from 'react'
+import { NavLink } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 
-
-export const Navbar = () => {
-    const context = useContext(ShopContext);//le damos las funciones del shop context a la variable context
-    
+const Navbar = () => {
+    const state = useSelector(state => state.handleCart)
     return (
-        <div className="navbar">
-        { !context.admin ? /*se hace esta pregunta para saber si el usuario registrado es un admin y saber las opciones que se ofrecen*/
-            !context.logged ? /*es para saber si hay un usuario logeado y por lo tanto al darle click en el carrito, poder redireccionar al login o al carrito */
-                <div className="links"> 
-                    <Link to="/"> Shop </Link> {/*redirige a la ruta raiz cuando se le da clic al texto de shop*/} 
-                    <Link to="/login"> {/*se redirige al login si se le da clic al carrito*/}
-                        <ShoppingCart size={32}/>{/*se llama al elemento shopping cart*/}
-                    </Link>
+        <nav className="navbar navbar-expand-lg navbar-light bg-light py-3 sticky-top">
+            <div className="container">
+                <NavLink className="navbar-brand fw-bold fs-4 px-2" to="/"> BATERNURA </NavLink>
+                <button className="navbar-toggler mx-2" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                    <span className="navbar-toggler-icon"></span>
+                </button>
+
+                <div className="collapse navbar-collapse" id="navbarSupportedContent">
+                    <ul className="navbar-nav m-auto my-2 text-center">
+                        <li className="nav-item">
+                            <NavLink className="nav-link" to="/">Home </NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink className="nav-link" to="/product">Products</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink className="nav-link" to="/about">About</NavLink>
+                        </li>
+                        <li className="nav-item">
+                            <NavLink className="nav-link" to="/contact">Contact</NavLink>
+                        </li>
+                    </ul>
+                    <div className="buttons text-center">
+                        <NavLink to="/login" className="btn btn-outline-dark m-2"><i className="fa fa-sign-in-alt mr-1"></i> Login</NavLink>
+                        <NavLink to="/register" className="btn btn-outline-dark m-2"><i className="fa fa-user-plus mr-1"></i> Register</NavLink>
+                        <NavLink to="/cart" className="btn btn-outline-dark m-2"><i className="fa fa-cart-shopping mr-1"></i> Cart ({state.length}) </NavLink>
+                    </div>
                 </div>
-                :
-                <div className="links"> {/*en caso de que este logeado se redirige igualmente al shop pero ahora cuando se le da clic al carrito redirecciona hacia el carrito*/}
-                    <Link to="/shop"> Shop </Link>
-                    <Link to="/cart">
-                        <ShoppingCart size={32}/>{/*se llama al elemento shopping cart*/}
-                    </Link>
-                </div>
-            :
-            <div className="links"> {/*si el usuario es admin envia hacia el editor del inventario y hacia el editor del perfil del administrador*/}
-                    <Link to="/editInventory"> Products </Link>
-                    <Link to="/editAdmin"> Admin Profile </Link>
-                </div>
-        }
-        </div>
+
+
+            </div>
+        </nav>
     )
-};
+}
+
+export default Navbar

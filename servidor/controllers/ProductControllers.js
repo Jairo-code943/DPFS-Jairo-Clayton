@@ -1,111 +1,129 @@
-//importamos el modelo
-
-import ProductModel from "../models/ProductModel.js";
+import connection from '../database'; // Import the MySQL connection
 import { productsStock, productMinStock } from "../main.js";
 import { sendMail } from "../mail/mail.js";
 
-//mostrar todos los registros
-export const getAllProducts = async (req,res) => {
+export const getAllProducts = async (req, res) => {
     try {
-        const products  = await ProductModel.findAll()
-        res.json(products)
+        const [rows] = await connection.execute('SELECT * FROM products');
+        res.json(rows); // Return all products
     } catch (error) {
-        res.json({message: error.message})
+        console.error('Error fetching products:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-//mostrar un registro
-export const getProduct = async (req,res) => {
+export const getProduct = async (req, res) => {
     try {
-       const product = await ProductModel.findAll({
-            where:{ id:req.params.id }
-        })
-        res.json(product[0])
+        const [rows] = await connection.execute('SELECT * FROM products WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        res.json(rows[0]); // Return the first matching product
     } catch (error) {
-        res.json( {message: error.message} )
+        console.error('Error fetching product:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-// crear un registro
-export const createProduct = async (req,res) => {
+export const createProduct = async (req, res) => {
+    const { name, price, stock } = req.body; // Ensure `name`, `price`, and `stock` exist in the body
     try {
-        await ProductModel.create(req.body)
-        res.json({
-            'message': 'registro creado'
-        })
+        const [result] = await connection.execute(
+            'INSERT INTO products (name, price, stock) VALUES (?, ?, ?)',
+            [name, price, stock]
+        );
+        res.json({ message: 'Product created', productId: result.insertId });
     } catch (error) {
-        res.json( {message: error.message})
+        console.error('Error creating product:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-//actualizar registro
-export const updateProducts = async (req,res) =>{
+export const updateProducts = async (req, res) => {
+    const { name, price, stock } = req.body;
     try {
-        await ProductModel.update(req.body, {
-            where: {id: req.params.id}
-        })
-        res.json({
-            'message': 'registro actualizado'
-        })
+        const [result] = await connection.execute(
+            'UPDATE products SET name = ?, price = ?, stock = ? WHERE id = ?',
+            [name, price, stock, req.params.id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        res.json({ message: 'Product updated' });
     } catch (error) {
-        res.json( {message: error.message})
+        console.error('Error updating product:', error);
+        res.json({ message: error.message });
     }
-}
-//eliminar registro
+};
 
-export const deleteProduct = async (req,res) =>{
+export const deleteProduct = async (req, res) => {
     try {
-        await ProductModel.destroy(req.body, {
-            where: {id: req.params.id}
-        })
-        res.json({
-            'message': 'registro borrado'
-        })
+        const [result] = await connection.execute('DELETE FROM products WHERE id = ?', [req.params.id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        res.json({ message: 'Product deleted' });
     } catch (error) {
-        res.json( {message: error.message})
+        console.error('Error deleting product:', error);
+        res.json({ message: error.message });
     }
-}
-
-//reservar o no reservar productos por medio de un click al carr
+};
 
 export const bookProduct = async (req, res) => {
     try {
         console.log(productsStock);
-        if (req.query.f === 'unbook'){
+
+        if (req.query.f === 'unbook') {
             productsStock[req.params.id]++;
             return res.json('Unbooked');
         } else if (req.query.f === 'book') {
-            if (productsStock[req.params.id] == 0) return res.json('Stockout')//en caso de que el producto sea igual a 0 se notifica que se acabo
+            if (productsStock[req.params.id] == 0) return res.json('Stockout'); // Notify if stock is zero
             productsStock[req.params.id]--;
             return res.json('Booked');
-        } 
+        }
+
         res.status(400).json('Bad request');
     } catch (error) {
-        res.json({message: error.message});
+        console.error('Error booking product:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-//Se actualiza el contenido de la base de datos
 const updateContent = async (product, quantity) => {
-    const stock = await ProductModel.findAll({
-        attributes: ['id', 'stock'],
-        where:{ id: product }
-    })
-    console.log(quantity);
-    await ProductModel.update({stock: stock[0].dataValues.stock - quantity[product]}, {
-        where: {id: product}
-    })
-    if (productMinStock[product].stockMin >= (stock[0].dataValues.stock - quantity[product])){
-        sendMail({id: product});
+    try {
+        const [stockResult] = await connection.execute(
+            'SELECT stock FROM products WHERE id = ?',
+            [product]
+        );
+
+        if (stockResult.length === 0) throw new Error('Product not found');
+        const stock = stockResult[0].stock;
+
+        await connection.execute(
+            'UPDATE products SET stock = ? WHERE id = ?',
+            [stock - quantity[product], product]
+        );
+
+        if (productMinStock[product] >= stock - quantity[product]) {
+            sendMail({ id: product }); // Trigger low stock notification
+        }
+    } catch (error) {
+        console.error('Error updating content:', error);
+        throw error;
     }
-}
-//Se compran los productos y se usa updatecontent para actualizar el contenido de cada uno
+};
+
 export const buyProducts = async (req, res) => {
     try {
-        console.log(typeof(req.body));
-        Object.keys(req.body).forEach(product => updateContent(product, req.body));
-        res.json("Successful purchase");
+        console.log(req.body);
+        const updates = Object.keys(req.body).map((product) =>
+            updateContent(product, req.body)
+        );
+        await Promise.all(updates); // Wait for all updates to complete
+        res.json('Successful purchase');
     } catch (error) {
-        res.json(error.message);   
+        console.error('Error buying products:', error);
+        res.json({ message: error.message });
     }
-}
+};
+

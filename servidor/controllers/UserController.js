@@ -1,50 +1,56 @@
-import UserModel from "../models/UserModel.js";
+import connection from '../database'; // Import the MySQL connection
 
-
-//Comando para obtener todos los usuarios de forma json
-export const getAllUsers = async (req,res) => {
+export const getAllUsers = async (req, res) => {
     try {
-        const Users  = await UserModel.findAll()
-        res.json(Users)
+        const [rows] = await connection.execute('SELECT * FROM users');
+        res.json(rows); // Return all users
     } catch (error) {
-        res.json({message: error.message})
+        console.error('Error fetching users:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-// Se crea un registro de usuario
-export const createUser = async (req,res) => {
+export const getUser = async (req, res) => {
     try {
-        await UserModel.create(req.body)
-        res.json({
-            'message': 'registro creado'
-        })
+        const [rows] = await connection.execute('SELECT * FROM users WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(rows[0]); // Return the first matching user
     } catch (error) {
-        res.json( {message: error.message})
+        console.error('Error fetching user:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-//Se actualiza un usuario en especifico
-export const updateUser = async (req,res) =>{
+export const createUser = async (req, res) => {
+    const { name, email, password } = req.body; // Ensure these fields exist in the body
     try {
-        await UserModel.update(req.body, {
-            where: {id: req.params.id}
-        })
-        res.json({
-            'message': 'registro actualizado'
-        })
+        const [result] = await connection.execute(
+            'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+            [name, email, password]
+        );
+        res.json({ message: 'User created', userId: result.insertId });
     } catch (error) {
-        res.json( {message: error.message})
+        console.error('Error creating user:', error);
+        res.json({ message: error.message });
     }
-}
+};
 
-//Se obtiene un usuario en especifico
-export const getUser = async (req,res) => {
+export const updateUser = async (req, res) => {
+    const { name, email, password } = req.body;
     try {
-       const user = await UserModel.findAll({
-            where:{ id:req.params.id }
-        })
-        res.json(user[0])
+        const [result] = await connection.execute(
+            'UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?',
+            [name, email, password, req.params.id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ message: 'User updated' });
     } catch (error) {
-        res.json( {message: error.message} )
+        console.error('Error updating user:', error);
+        res.json({ message: error.message });
     }
-}
+};
+
